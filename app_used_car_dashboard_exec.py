@@ -57,7 +57,6 @@ st.title("🚗 Used Car Market Dashboard")
 st.caption("Executive-style portfolio analytics for synthetic used car financial assets")
 
 
-@st.cache_data
 def load_data(source):
     df = pd.read_csv(source)
 
@@ -397,22 +396,40 @@ def show_drilldown(df: pd.DataFrame) -> None:
     )
 
 
+# -------------------------------------------------------
+# App execution and before-caching timing display
+# -------------------------------------------------------
+app_start = time.perf_counter()
+
 st.sidebar.header("Dashboard Setup")
 page = st.sidebar.radio("Go to", ["Overview", "Drill-Down"])
 
-uploaded_file = st.sidebar.file_uploader("Upload used car CSV (optional)", type=["csv"])
 default_path = Path("used_car_financial_assets_800k.csv")
 
 try:
-    if uploaded_file is not None:
-        df = load_data(uploaded_file)
-        st.sidebar.success("Using uploaded CSV file")
-    elif default_path.exists():
-        df = load_data(default_path)
-        st.sidebar.success(f"Using local file: {default_path.name}")
-    else:
-        st.info("Upload `used_car_financial_assets_800k.csv` from the sidebar to run this dashboard.")
-        st.stop()
+    load_start = time.perf_counter()
+    df = load_data(default_path)
+    load_time = time.perf_counter() - load_start
+    app_elapsed = time.perf_counter() - app_start
+
+    if "before_cache_timing_log" not in st.session_state:
+        st.session_state.before_cache_timing_log = []
+    st.session_state.before_cache_timing_log.append(app_elapsed)
+
+    st.subheader("Performance Metrics Before Caching")
+    col1, col2 = st.columns(2)
+    col1.metric("Data Load Time (sec)", f"{load_time:.4f}")
+    col2.metric("App Refresh Time (sec)", f"{app_elapsed:.4f}")
+
+    if len(st.session_state.before_cache_timing_log) > 1:
+        timing_df = pd.DataFrame({
+            "run_number": range(1, len(st.session_state.before_cache_timing_log) + 1),
+            "refresh_time_sec": st.session_state.before_cache_timing_log
+        })
+        st.dataframe(timing_df, use_container_width=True, hide_index=True)
+
+    st.caption("These timings are displayed in the app for the before-caching measurement step.")
+    st.sidebar.success(f"Using local file: {default_path.name}")
 except Exception as exc:
     st.error(f"Unable to load the dataset: {exc}")
     st.stop()
